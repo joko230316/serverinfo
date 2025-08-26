@@ -1,0 +1,131 @@
+(fserver) root@k:/home/k1# cloudflared tunnel --url http://localhost:80
+--->  ps aux | grep cloudflared
+
+sudo ss -tlpn | grep :80  Æ÷Æ®¸¦ »ç¿ëÇÏ´Â ÇÁ·Î±×·¥ Ã£±â
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    print("TradingView Alert Received:", request.json)
+    return "OK", 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=80)  
+
+2. cloudflared???
+
+3.  Cannot determine default origin certificate path 
+
+    Quick Tunnel?€ cert.pem ?
+1) cloudflared ?
+
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+cloudflared --version
+cloudflared tunnel login
+3) Named Tunnel ?
+cloudflared tunnel create tradingview-webhook
+
+cloudflared tunnel route dns tradingview-webhook webhook.yourdomain.com
+
+sudo mkdir -p /etc/cloudflared
+sudo nano /etc/cloudflared/config.yml
+# /etc/cloudflared/config.yml
+tunnel: <TUNNEL_ID>  #
+credentials-file: /home/<YOUR_USER>/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: webhook.yourdomain.com
+    service: http://localhost:5000
+    originRequest:
+      connectTimeout: 10s
+      # ?„ìš”???¤ë”/?€?„ì•„???µì…˜ ì¶”ê? ê°€??
+  - service: http_status:404
+sudo cloudflared service install
+sudo tee /etc/systemd/system/cloudflared.service >/dev/null <<'EOF'
+[Unit]
+Description=cloudflared tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<YOUR_USER>
+ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml tunnel run
+Restart=always
+RestartSec=5s
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloudflared
+
+# ?íƒœ ?•ì¸/ë¡œê·¸
+systemctl status cloudflared
+journalctl -u cloudflared -f
+
+    ExecStart??cloudflared ê²½ë¡œ(/usr/local/bin/...)???¤ì œ ?¤ì¹˜ ê²½ë¡œ??ë§ê²Œ ?˜ì •?˜ì„¸??
+    User=<YOUR_USER>???¤ì œ ?¬ìš©?ë¡œ ë°”ê¾¸?¸ìš”.
+
+8) ?¹í›… ??Flask) ?ˆì‹œ (ë¹ ë¥¸ ?‘ë‹µ ê¶Œì¥)
+
+TradingView???‘ë‹µ ì§€?°ì— ë¯¼ê°?©ë‹ˆ?? ì¦‰ì‹œ 200 OKë¥?ì£¼ê³ , ì²˜ë¦¬ ë¡œì§?€ ë¹„ë™ê¸°ë¡œ ?Œë¦¬???µê???ì¢‹ìŠµ?ˆë‹¤.
+
+# app.py
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(silent=True) or {}
+    # TODO: ?¬ê¸°??ë¹ ë¥´ê²?ê²€ì¦??ì‰ë§??˜ê³  ì¦‰ì‹œ ?‘ë‹µ
+    print("TradingView Alert:", data)
+    return jsonify({"ok": True}), 200
+
+if __name__ == "__main__":
+    # 5000 ?¬íŠ¸ ê¶Œì¥ (root ë¶ˆí•„??
+    app.run(host="0.0.0.0", port=5000)
+
+9) ë³´ì•ˆ ??
+
+    ê³µìœ  ?œí¬ë¦? TradingView??ì»¤ìŠ¤?€ ?¤ë”ë¥?ëª??£ìœ¼??
+
+        URL??ê¸?? í°???¬í•¨: https://webhook.yourdomain.com/webhook/<LONG_SECRET>
+
+        ?ëŠ” ë³¸ë¬¸ JSON??secret ?„ë“œë¥??£ê³  ?œë²„?ì„œ ê²€ì¦í•˜?¸ìš”.
+
+    Cloudflare ë°©í™”ë²?ê·œì¹™?¼ë¡œ /webhookë§??ˆìš©?˜ê±°?? ?ˆì´??ë¦¬ë°‹??ê±????ˆìŠµ?ˆë‹¤.
+
+    ?í•œ?¤ë©´ Cloudflare Access(Zero Trust)ë¡?ì¶”ê? ë³´í˜¸(?˜ì?ë§?TradingViewê°€ ?µê³¼?´ì•¼ ?˜ë?ë¡?ë³´í†µ?€ ?¨ìŠ¤).
+
+10) ?ì£¼ ë³´ëŠ” ê²½ê³ /?¤ë¥˜ ì²˜ë¦¬
+
+    Cannot determine default origin certificate path ... cert.pem
+    ??quick tunnel(ê³„ì • ?†ëŠ”)?ì„œ ?”í•œ ê²½ê³ ?…ë‹ˆ?? ??ë¡œê·¸??cert.pem ?ˆì°¨(2ë²?ë¥?ê±°ì¹˜ë©??¬ë¼ì§‘ë‹ˆ??
+
+    Incoming request ended abruptly: context canceled
+    ??ë°±ì—”???±ì´ ?‘ë‹µ??ë¹¨ë¦¬ ëª?ì£¼ê±°?? ê²½ë¡œ/?¬íŠ¸ ë¯¸ìŠ¤ë§¤ì¹˜????ë°œìƒ. ?±ì´ ë¨¼ì? ???ˆëŠ”ì§€, /webhook ê²½ë¡œê°€ ë§ëŠ”ì§€ ?•ì¸?˜ì„¸??
+
+    connect: connection refused
+    ??cloudflaredê°€ ?„ë¡?œí•˜?¤ëŠ” localhost:?¬íŠ¸?ì„œ ?±ì´ ?????ˆìŒ. ?±ë????¤í–‰!
+
+    ping_group_range ê²½ê³ 
+    ??ICMP ?„ë¡??ping) ê´€?¨ì´??HTTP ?°ë„?ëŠ” ?í–¥ ?†ìŒ. ë¬´ì‹œ?´ë„ ?©ë‹ˆ??
+
+11) ?´ì˜ ??
+
+    ë¡œê·¸ ë³´ê¸°: cloudflared tunnel logs tradingview-webhook
+
+    ?íƒœ ë³´ê¸°: cloudflared tunnel info tradingview-webhook
+
+    ?¬ì‹œ?? sudo systemctl restart cloudflared
+
+    DNS ?•ì¸: dig +short webhook.yourdomain.com ?ì„œ *.cfargotunnel.com CNAME??ë³´ì—¬???•ìƒ.
+
+?„ìš”?˜ì‹œë©? ???¨ê³„?¤ì„ ?¬ìš©??ê²½ë¡œ/?„ë©”?¸ì— ë§ì¶˜ ë§ì¶¤ ?¤í¬ë¦½íŠ¸(setup_named_tunnel.sh)ê¹Œì? ë°”ë¡œ ë§Œë“¤???œë¦´ê²Œìš”.

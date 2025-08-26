@@ -1,0 +1,28 @@
+sudo apt update
+sudo apt upgrade
+sudo apt install ufw
+sudo ufw enable
+sudo ufw status
+sudo ufw allow 3389/tcp
+sudo apt install xrdp
+
+Bash
+
+sudo systemctl start xrdp
+sudo systemctl enable xrdp
+
+sudo ufw allow outgoing
+sudo ufw allow incoming
+
+Bash
+
+sudo ufw allow 22/tcp  
+sudo ufw allow 80/tcp  
+
+sudo add-apt-repository universe
+sudo apt update
+
+sudo apt install xorgxrdp-hwe-jammy
+sudo apt upgrade
+
+sudo apt install wireless-regdb  
